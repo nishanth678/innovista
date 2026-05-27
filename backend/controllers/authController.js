@@ -18,8 +18,10 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: 'Invalid role' });
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
+
     // Check if user exists
-    let user = await User.findOne({ email });
+    let user = await User.findOne({ email: normalizedEmail });
     if (user) {
       return res.status(400).json({ message: 'User already exists' });
     }
@@ -30,7 +32,7 @@ exports.register = async (req, res) => {
     // Create user
     user = new User({
       name,
-      email,
+      email: normalizedEmail,
       password: hashedPassword,
       role,
     });
@@ -66,6 +68,9 @@ exports.login = async (req, res) => {
     }
 
     let user = await User.findOne({ email: loginId });
+    if (!user) {
+      user = await User.findOne({ email: { $regex: `^${loginId}$`, $options: 'i' } });
+    }
 
     if (!user) {
       // Allow student login by roll number as well as email

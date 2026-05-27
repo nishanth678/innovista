@@ -256,8 +256,10 @@ exports.createMentor = async (req, res) => {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
+
     // Check if user exists
-    let user = await User.findOne({ email });
+    let user = await User.findOne({ email: normalizedEmail });
     if (user) {
       return res.status(400).json({ message: 'User already exists' });
     }
@@ -268,7 +270,7 @@ exports.createMentor = async (req, res) => {
     // Create user
     user = new User({
       name,
-      email,
+      email: normalizedEmail,
       password: hashedPassword,
       role: 'mentor',
       department,
@@ -446,8 +448,10 @@ exports.addStudent = async (req, res) => {
       return res.status(404).json({ message: 'Mentor not found' });
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
+
     // Check if user exists
-    let user = await User.findOne({ email });
+    let user = await User.findOne({ email: normalizedEmail });
     if (user) {
       return res.status(400).json({ message: 'User already exists' });
     }
@@ -458,7 +462,7 @@ exports.addStudent = async (req, res) => {
     // Create user
     user = new User({
       name,
-      email,
+      email: normalizedEmail,
       password: hashedPassword,
       role: 'student',
       department,

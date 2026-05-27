@@ -60,9 +60,26 @@ exports.getAssignedGroups = async (req, res) => {
       return res.status(404).json({ message: 'Mentor not found' });
     }
 
-    const groups = await Group.find({ _id: { $in: mentor.groups } })
-      .populate('students')
-      .populate('project');
+    let groups = [];
+
+    if (mentor.groups?.length > 0) {
+      groups = await Group.find({ _id: { $in: mentor.groups } })
+        .populate('students')
+        .populate('project');
+    }
+
+    if (groups.length === 0) {
+      groups = await Group.find({ mentor: mentor._id })
+        .populate('students')
+        .populate('project');
+    }
+
+    if (groups.length === 0) {
+      const studentGroupIds = await Student.find({ mentor: mentor._id }).distinct('group');
+      groups = await Group.find({ _id: { $in: studentGroupIds } })
+        .populate('students')
+        .populate('project');
+    }
 
     res.json(groups);
   } catch (error) {
@@ -234,20 +251,22 @@ exports.getGroupAttendanceSummary = async (req, res) => {
   try {
     const { groupId } = req.params;
 
-    const group = await Group.findById(groupId);
+    const group = await Group.findById(groupId).populate('students');
     if (!group) {
       return res.status(404).json({ message: 'Group not found' });
     }
 
     const attendanceData = [];
 
-    for (const studentId of group.students) {
-      const attendance = await Attendance.find({ student: studentId });
+    for (const student of group.students) {
+      const attendance = await Attendance.find({ student: student._id });
       const presentCount = attendance.filter(a => a.status === 'present').length;
       const percentage = attendance.length ? Math.round(((presentCount) / attendance.length) * 100) : 0;
 
       attendanceData.push({
-        studentId,
+        studentId: student._id,
+        studentName: student.user?.name || 'Student',
+        rollNumber: student.rollNumber,
         total: attendance.length,
         present: presentCount,
         percentage,
@@ -270,25 +289,23 @@ exports.searchStudents = async (req, res) => {
       return res.status(404).json({ message: 'Mentor not found' });
     }
 
-    let searchCriteria = { _id: { $in: mentor.students } };
-
-    if (query) {
-      searchCriteria = {
-        ...searchCriteria,
-        $or: [
-          { 'user.name': { $regex: query, $options: 'i' } },
-          { rollNumber: { $regex: query, $options: 'i' } },
-        ]
-      };
-    }
+    let students = await Student.find({ mentor: mentor._id })
+      .populate('user')
+      .populate('batch')
+      .populate('group');
 
     if (department) {
-      searchCriteria.department = department;
+      students = students.filter((student) => student.department?.toLowerCase() === department.toLowerCase());
     }
 
-    const students = await Student.find(searchCriteria)
-      .populate('user')
-      .populate('batch');
+    if (query) {
+      const q = query.toLowerCase();
+      students = students.filter((student) => {
+        const name = student.user?.name?.toLowerCase() || '';
+        const roll = student.rollNumber?.toLowerCase() || '';
+        return name.includes(q) || roll.includes(q);
+      });
+    }
 
     res.json(students);
   } catch (error) {
